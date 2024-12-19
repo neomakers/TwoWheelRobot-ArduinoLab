@@ -1,0 +1,253 @@
+
+This directory is intended for project specific (private) libraries.
+PlatformIO will compile them to static libraries and link into executable file.
+
+The source code of each library should be placed in an own separate directory
+("lib/your_library_name/[here are source files]").
+
+For example, see a structure of the following two libraries `Foo` and `Bar`:
+
+|--lib
+|  |
+|  |--Bar
+|  |  |--docs
+|  |  |--examples
+|  |  |--src
+|  |     |- Bar.c
+|  |     |- Bar.h
+|  |  |- library.json (optional, custom build options, etc) https://docs.platformio.org/page/librarymanager/config.html
+|  |
+|  |--Foo
+|  |  |- Foo.c
+|  |  |- Foo.h
+|  |
+|  |- README --> THIS FILE
+|
+|- platformio.ini
+|--src
+   |- main.c
+
+and a contents of `src/main.c`:
+```
+#include <Foo.h>
+#include <Bar.h>
+
+int main (void)
+{
+  ...
+}
+
+```
+
+PlatformIO Library Dependency Finder will find automatically dependent
+libraries scanning project source files.
+
+More information about PlatformIO Library Dependency Finder
+- https://docs.platformio.org/page/librarymanager/ldf.html
+
+## 测试工具
+
+遥控器<PS2X_lib.h>
+需要下载库
+
+## Right Motor Connection
+ In3->Pin_9
+   
+ In4->Pin_6
+
+## Left Motor Connection
+ In1->Pin_3
+
+ In2->Pin_5
+
+
+ ## 左右轮测试程序
+
+ ```c++
+ 
+#include <Arduino.h>
+#include"configuration.h"
+#include<PS2X_lib.h>
+
+char inputBuffer[50];           // 用于存储串口输入的字符数组
+int bufferIndex = 0;            // 字符数组当前索引
+int convertedNumber = 0;        // 用于存储转换后的整数
+bool inputComplete = false;     // 标记输入是否完成
+
+void setup(){
+  pinMode(SENSOR_1_PIN, INPUT);
+  pinMode(SENSOR_2_PIN, INPUT);
+  pinMode(SENSOR_3_PIN, INPUT);
+
+  pinMode(MOTOR_LEFT_A_PIN, OUTPUT);
+  pinMode(MOTOR_LEFT_D_PIN, OUTPUT);
+  digitalWrite(MOTOR_LEFT_EN,HIGH);
+
+
+  pinMode(MOTOR_RIGHT_A_PIN, OUTPUT);
+  pinMode(MOTOR_RIGHT_D_PIN, OUTPUT);
+  digitalWrite(MOTOR_LEFT_EN,HIGH);
+
+  pinMode(LED_BUILTIN, OUTPUT);
+  Serial.begin(9600);
+  Serial.println("请输入一个整数：");
+}
+
+void loop(){
+  if (Serial.available() > 0) {
+    // 读取串口数据并追加到inputBuffer中
+    char incomingChar = Serial.read();
+    if (incomingChar == '\n') {  // 检测换行符，表示输入结束
+      inputBuffer[bufferIndex] = '\0';  // 在字符串末尾添加空字符，形成C风格字符串
+      inputComplete = true;
+    } else if (bufferIndex < 49) {  // 确保不会超出数组边界
+      inputBuffer[bufferIndex] = incomingChar;
+      bufferIndex++;
+    }
+
+    // 如果输入完成，则进行转换并打印结果
+    if (inputComplete) {
+      // 使用atoi()函数将C风格字符串转换为整数
+      convertedNumber = atoi(inputBuffer);
+      // 打印转换后的整数
+      Serial.print("您输入的整数是：");
+      Serial.println(convertedNumber);
+      // 重置变量，为下一次输入做准备
+      bufferIndex = 0;
+      inputComplete = false;
+    }
+  }
+  if(convertedNumber<0){
+    analogWrite(MOTOR_LEFT_D_PIN,convertedNumber);
+    analogWrite(MOTOR_LEFT_A_PIN,0);
+  }else{
+    analogWrite(MOTOR_LEFT_D_PIN,0);
+    analogWrite(MOTOR_LEFT_A_PIN,convertedNumber);    
+  }
+
+  // if(convertedNumber<0){
+  //   analogWrite(MOTOR_RIGHT_D_PIN,convertedNumber);
+  //   analogWrite(MOTOR_RIGHT_A_PIN,0);
+  // }else{
+  //   analogWrite(MOTOR_RIGHT_D_PIN,0);
+  //   analogWrite(MOTOR_RIGHT_A_PIN,convertedNumber);    
+  // }
+}
+ ```
+
+ ## 测试遥控器PS2X
+需要将头文件[`PS2X_lib.h`]()和源文件[`PS2X_lib.cpp`]()安装到`C:\Users\Houki\.platformio\packages\framework-arduino-avr\cores\arduino`下。
+ ```c
+#include <PS2X_lib.h>  // 引入 PS2 控制器库
+
+PS2X ps2x;  // 创建 PS2 控制器对象
+
+// 定义控制器连接引脚
+#define PS2_DAT 12
+#define PS2_CMD 11
+#define PS2_SEL 10
+#define PS2_CLK 13
+
+void setup() {
+  Serial.begin(9600);  // 初始化串口通信
+  int error = ps2x.config_gamepad(PS2_CLK, PS2_CMD, PS2_SEL, PS2_DAT);  // 配置 PS2 控制器的引脚
+
+  if (error == 0) {
+    Serial.println("PS2 Controller initialized successfully.");
+  } else {
+    Serial.println("Error initializing PS2 controller.");
+    while (1);  // 如果初始化失败，停止程序
+  }
+}
+
+void loop() {
+  ps2x.read_gamepad();  // 读取 PS2 手柄的状态
+
+  // 判断按钮状态并输出
+  if (ps2x.Button(PSB_TRIANGLE)) {
+    Serial.println("Triangle button pressed.");
+  }
+  if (ps2x.Button(PSB_CIRCLE)) {
+    Serial.println("Circle button pressed.");
+  }
+
+  // 输出摇杆值
+  int leftX = ps2x.Analog(PSS_LX);  // 左摇杆 X 轴
+  int leftY = ps2x.Analog(PSS_LY);  // 左摇杆 Y 轴
+  Serial.print("Left X: ");
+  Serial.print(leftX);
+  Serial.print(" Left Y: ");
+  Serial.println(leftY);
+
+  delay(100);  // 延时，避免输出过快
+}
+ ```
+
+ ## 测试遥控小车程序
+
+ ```c
+ #include <PS2X_lib.h>  // 引入 PS2 控制器库
+#include"configuration.h"
+PS2X ps2x;  // 创建 PS2 控制器对象
+
+void setup() {
+    pinMode(SENSOR_1_PIN, INPUT);
+    pinMode(SENSOR_2_PIN, INPUT);
+    pinMode(SENSOR_3_PIN, INPUT);
+
+    pinMode(MOTOR_LEFT_A_PIN, OUTPUT);
+    pinMode(MOTOR_LEFT_D_PIN, OUTPUT);
+    digitalWrite(MOTOR_LEFT_EN,HIGH);
+
+
+    pinMode(MOTOR_RIGHT_A_PIN, OUTPUT);
+    pinMode(MOTOR_RIGHT_D_PIN, OUTPUT);    digitalWrite(MOTOR_LEFT_EN,HIGH);
+
+    Serial.begin(9600);  // 初始化串口通信
+    int error = ps2x.config_gamepad(PS2_CLK, PS2_CMD, PS2_SEL, PS2_DAT);  // 配置 PS2 控制器的引脚
+
+    if (error == 0) {
+      Serial.println("PS2 Controller initialized successfully.");
+    } else {
+      Serial.println("Error initializing PS2 controller.");
+      while (1);  // 如果初始化失败，停止程序
+    }
+}
+int convertedNumber=0;
+void loop() {
+  ps2x.read_gamepad();  // 读取 PS2 手柄的状态
+
+  // 判断按钮状态并输出
+  if (ps2x.Button(PSB_TRIANGLE)) {
+    Serial.println("Triangle button pressed.");
+  }
+  if (ps2x.Button(PSB_CIRCLE)) {
+    Serial.println("Circle button pressed.");
+  }
+
+  // 输出摇杆值
+  int leftX = ps2x.Analog(PSS_LX);  // 左摇杆 X 轴
+  int leftY = ps2x.Analog(PSS_LY);  // 左摇杆 Y 轴
+  Serial.print("Left X: ");
+  Serial.print(leftX);
+  Serial.print(" Left Y: ");
+  Serial.println(leftY);
+  convertedNumber=leftY;
+  if(convertedNumber<125){
+    analogWrite(MOTOR_LEFT_D_PIN,convertedNumber);
+    analogWrite(MOTOR_LEFT_A_PIN,0);
+  }else{
+    analogWrite(MOTOR_LEFT_D_PIN,0);
+    analogWrite(MOTOR_LEFT_A_PIN,convertedNumber);    
+  }
+
+  if(convertedNumber<0){
+    analogWrite(MOTOR_RIGHT_D_PIN,convertedNumber);
+    analogWrite(MOTOR_RIGHT_A_PIN,0);
+ }else{
+   analogWrite(MOTOR_RIGHT_D_PIN,0);
+   analogWrite(MOTOR_RIGHT_A_PIN,convertedNumber);    
+ }
+  delay(100);  // 延时，避免输出过快
+}
+ ```
