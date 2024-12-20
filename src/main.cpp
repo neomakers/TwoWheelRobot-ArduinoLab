@@ -1,36 +1,17 @@
-#include "ps2_controller.h"
+#include <Arduino.h>
+#include "diff_drive.h"
 
-// 创建PS2Controller对象
-PS2Controller ps2Controller;
+DifferentialDrive drive(0.15);  // 假设轮距为 0.15 米
 
 void setup() {
-  Serial.begin(9600);
-
-  // 尝试初始化 PS2 控制器
-  if (!ps2Controller.init()) {
-    Serial.println("PS2 Controller initialization failed.");
-    while (1);  // 初始化失败，停在这里
-  }
-
-  Serial.println("PS2 Controller initialized successfully.");
+    Serial.begin(9600);
 }
 
 void loop() {
-  // 每次循环时读取控制器的状态
-  ps2Controller.update();
-  
-  // 获取遥控器的状态
-  int analogX = ps2Controller.state.analogX;
-  int analogY = ps2Controller.state.analogY;
-  bool buttonA = ps2Controller.state.buttonA;
-
-  // 输出摇杆值和按钮状态
-  Serial.print("Analog X: ");
-  Serial.print(analogX);
-  Serial.print(" Analog Y: ");
-  Serial.print(analogY);
-  Serial.print(" Button A: ");
-  Serial.println(buttonA ? "Pressed" : "Not Pressed");
-
-  delay(500);  // 延时500毫秒，避免输出过快
+    // 在循环中你可以调用控制函数来实时调整速度
+    for(int i=0;i<10;i++){
+        drive.calculateWheelSpeeds(0.1, i*0.1);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
+        delay(1000);
+    }
+    
 }

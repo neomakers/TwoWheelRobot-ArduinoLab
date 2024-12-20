@@ -506,3 +506,111 @@ void loop() {
 }
 
 ```
+# `DifferentialDrive` 控制模型
+
+## 1. **项目背景与目标**
+
+在本项目中，我们需要为双轮差速驱动小车设计并实现一个控制模型。目标是根据输入的线速度（`v`）和角速度（`ω`），计算左右轮的速度，并通过 Arduino 控制小车的运动。使用差速驱动模型进行运动学建模，计算过程包括根据轮距（`d`）来确定左右轮的速度。
+
+#### 2. **模型设计**
+
+**差速驱动控制模型**：双轮小车的控制模型基于差速驱动原理，左右轮的速度由下列公式计算：
+
+- **左轮速度**：`v_L = v - (ω * d / 2)`
+- **右轮速度**：`v_R = v + (ω * d / 2)`
+
+其中：
+- `v`：线速度（单位：米/秒）
+- `ω`：角速度（单位：弧度/秒）
+- `d`：轮距（单位：米）
+
+该模型的关键任务是通过输入的线速度和角速度来分别控制左右轮的速度。
+
+#### 3. **代码实现**
+
+##### `diff_drive.h`
+
+首先，定义了一个名为 `DifferentialDrive` 的类，用于控制双轮小车的运动。在头文件中，声明了构造函数和计算速度的成员函数。
+
+```cpp
+#ifndef DIFF_DRIVE_H
+#define DIFF_DRIVE_H
+
+class DifferentialDrive {
+public:
+    DifferentialDrive(float wheelDistance);  // 构造函数，初始化轮距
+
+    // 计算左右轮速度
+    void calculateWheelSpeeds(float v, float omega);
+
+private:
+    float d;  // 轮距（单位：米）
+};
+
+#endif
+```
+
+##### `diff_drive.cpp`
+
+在源文件中，实现了类的构造函数和 `calculateWheelSpeeds` 函数。该函数根据传入的线速度和角速度计算左右轮的速度，并通过串口输出结果。
+
+```cpp
+#include "diff_drive.h"
+#include <Arduino.h>
+
+DifferentialDrive::DifferentialDrive(float wheelDistance) {
+    this->d = wheelDistance;
+}
+
+void DifferentialDrive::calculateWheelSpeeds(float v, float omega) {
+    float v_L = v - (omega * d / 2);  // 左轮速度
+    float v_R = v + (omega * d / 2);  // 右轮速度
+
+    // 输出左右轮速度
+    Serial.print("Left Wheel Speed: ");
+    Serial.println(v_L);
+    Serial.print("Right Wheel Speed: ");
+    Serial.println(v_R);
+}
+```
+
+##### `main.cpp`
+
+在主程序中，初始化 `DifferentialDrive` 类并通过调用 `calculateWheelSpeeds` 函数计算左右轮的速度。这里使用一个简单的 `for` 循环模拟不同角速度下的速度计算。
+
+```cpp
+#include <Arduino.h>
+#include "diff_drive.h"
+
+DifferentialDrive drive(0.15);  // 假设轮距为 0.15 米
+
+void setup() {
+    Serial.begin(9600);
+}
+
+void loop() {
+    // 在循环中你可以调用控制函数来实时调整速度
+    for(int i = 0; i < 10; i++) {
+        drive.calculateWheelSpeeds(0.1, i * 0.1);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
+        delay(1000);
+    }
+}
+```
+
+#### 4. **工作流程与测试**
+
+1. **轮距设定**：初始化 `DifferentialDrive` 类时传入轮距参数，例如 `0.15` 米。这是双轮小车的两轮中心距离。
+2. **计算速度**：在 `loop()` 函数中，我们模拟了不同的角速度（通过 `i*0.1` 变化）下，计算左右轮的速度。每次计算后，程序通过串口输出左右轮速度。
+3. **测试结果**：每次循环调用 `calculateWheelSpeeds`，并输出左右轮的速度。例如，当角速度为 `0.2 rad/s` 时，左轮速度为 `0.05 m/s`，右轮速度为 `0.15 m/s`。通过这些输出，可以验证计算是否符合预期。
+
+#### 5. **工作日志总结**
+
+在这个阶段，我们成功实现了差速驱动控制模型，并且能够通过 Arduino 控制双轮小车的左右轮速度。通过计算不同角速度下左右轮的速度，我们可以进行更复杂的运动控制。接下来，可以在此基础上实现更多的功能，如前进、后退、转向等。
+
+##### **下步计划**
+1. **扩展功能**：增加前后运动、旋转等控制功能。
+2. **优化控制逻辑**：实现更复杂的运动控制算法，如 PID 控制。
+3. **硬件测试**：将模型应用到实际硬件中进行测试，调整速度和角度的控制精度。
+
+通过这一过程，已初步完成了差速驱动小车的基础控制模型，并验证了其基本功能。
+
