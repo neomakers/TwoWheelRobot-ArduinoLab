@@ -6,7 +6,7 @@
 #define SENSOR_2_PIN A2
 #define SENSOR_3_PIN A3
 
-// MOTOR_PIN_LEFT
+// MOTOR_PIN_LEFT 
 #define MOTOR_LEFT_EN 2
 #define MOTOR_LEFT_A_PIN 3
 #define MOTOR_LEFT_D_PIN 5
@@ -23,8 +23,5 @@
 #define PS2_CMD 11
 #define PS2_SEL 10
 #define PS2_CLK 13
-
-
-
 
 #endif
