@@ -7,17 +7,18 @@ DifferentialDrive::DifferentialDrive(float wheelDistance) {
 }
 
 // 计算左右轮的速度
-void DifferentialDrive::calculateWheelSpeeds(float v, float omega) {
+void DifferentialDrive::calculateWheelSpeeds(float v, float omega,bool show) {
     // v: 线速度 (m/s)
     // omega: 角速度 (rad/s)
     // d: 轮距 (m)
 
-    float v_L = v - (omega * d / 2);  // 左轮速度
-    float v_R = v + (omega * d / 2);  // 右轮速度
-
-    // 输出左右轮速度
-    Serial.print("Left Wheel Speed: ");
-    Serial.println(v_L);
-    Serial.print("Right Wheel Speed: ");
-    Serial.println(v_R);
+    v_L = v - (omega * d / 2);  // 左轮速度
+    v_R = v + (omega * d / 2);  // 右轮速度
+    if(show==true){
+        // 输出左右轮速度
+        Serial.print("Left Wheel Speed: ");
+        Serial.println(v_L);
+        Serial.print("Right Wheel Speed: ");
+        Serial.println(v_R);
+    }
 }

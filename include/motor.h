@@ -9,7 +9,7 @@ public:
     // 初始化电机引脚（可选）
     void begin();
     // 设置电机速度（0-255）和方向（正转或反转）
-    void setSpeed(int speed);
+    void setSpeed(int speed,unsigned int zone=10);
     // 停止电机
     void stop();
 private:

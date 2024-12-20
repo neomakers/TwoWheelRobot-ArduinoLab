@@ -181,6 +181,112 @@ void loop() {
 ```
 
 # 尝试用遥控器控制
+
+你提到的这个问题很关键，确实，如果 `PS2X ps2x;` 只是作为一个局部变量在 `init()` 函数中创建，那么当 `init()` 函数执行完毕后，这个对象的作用域就会结束，`ps2x` 对象的空间会被释放，无法在后续的代码中继续使用。
+
+为了避免这个问题，我们应该将 `PS2X` 对象声明为 **类成员变量** 或者 **全局变量**，这样它的生命周期就可以延续到整个程序的运行过程。
+
+### 方案 1：将 `PS2X` 对象声明为类成员变量（推荐）
+
+最好的做法是将 `PS2X` 对象作为 `PS2Controller` 类的成员变量，这样 `ps2x` 对象会与 `PS2Controller` 对象的生命周期同步，并且可以在类的其他成员函数中使用。
+
+#### 更新后的代码
+
+##### **`ps2_controller.h`**
+```cpp
+#ifndef PS2_CONTROLLER_H
+#define PS2_CONTROLLER_H
+
+// 宏定义：控制器连接引脚
+#define PS2_DAT 12
+#define PS2_CMD 11
+#define PS2_SEL 10
+#define PS2_CLK 13
+
+#include <PS2X_lib.h>  // 引入PS2X库
+#include <Arduino.h>
+
+class PS2Controller {
+public:
+    // 构造函数，接受最大重试次数和重试延迟
+    PS2Controller(int maxRetries = 5, int retryDelay = 1000);
+    
+    // 封装初始化过程
+    bool init();
+    
+private:
+    int _maxRetries;  // 最大重试次数
+    int _retryDelay;  // 每次重试的间隔时间
+    PS2X ps2x;  // PS2 控制器对象，作为成员变量
+};
+
+#endif  // PS2_CONTROLLER_H
+```
+
+##### **`ps2_controller.cpp`**
+```cpp
+#include "ps2_controller.h"
+
+// 初始化构造函数，接受最大重试次数和重试延迟
+PS2Controller::PS2Controller(int maxRetries, int retryDelay) {
+    _maxRetries = maxRetries;
+    _retryDelay = retryDelay;
+}
+
+// 初始化PS2控制器
+bool PS2Controller::init() {
+    int error = -1;
+    int attempt = 0;
+
+    // 重试初始化PS2控制器
+    while (attempt < _maxRetries) {
+        error = ps2x.config_gamepad(PS2_CLK, PS2_CMD, PS2_SEL, PS2_DAT);
+        if (error == 0) {
+            Serial.println("PS2 Controller initialized successfully.");
+            return true;  // 成功初始化，返回true
+        } else {
+            attempt++;
+            Serial.print("Initialization failed. Attempt ");
+            Serial.print(attempt);
+            Serial.print(" of ");
+            Serial.println(_maxRetries);
+            delay(_retryDelay);  // 等待后重试
+        }
+    }
+
+    Serial.println("Failed to initialize PS2 controller after maximum retries.");
+    return false;  // 初始化失败，返回false
+}
+```
+
+##### **`main.ino`**
+```cpp
+#include "ps2_controller.h"
+
+// 创建PS2Controller对象
+PS2Controller ps2Controller;
+
+void setup() {
+  Serial.begin(9600);
+
+  // 尝试初始化 PS2 控制器
+  if (!ps2Controller.init()) {
+    while (1);  // 初始化失败，停在这里
+  }
+
+  // 其他初始化代码
+}
+
+void loop() {
+  // 主循环代码
+}
+```
+
+### **解释**
+- 将 `PS2X ps2x` 声明为 `PS2Controller` 类的成员变量，这样它会在 `PS2Controller` 对象的生命周期内存在。
+- 在 `init()` 函数中，直接使用类成员 `ps2x` 进行控制器的初始化。
+- 由于 `ps2x` 是类的成员变量，它的生命周期与 `PS2Controller` 对象相同，因此在类的任何方法中都可以访问它。
+
 ```c
 #include<Arduino.h>
 #include <PS2X_lib.h>  // 引入 PS2 控制器库
@@ -592,7 +698,7 @@ void loop() {
     // 在循环中你可以调用控制函数来实时调整速度
     for(int i = 0; i < 10; i++) {
         drive.calculateWheelSpeeds(0.1, i * 0.1);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
-        delay(1000);
+          delay(1000);
     }
 }
 ```
@@ -614,3 +720,123 @@ void loop() {
 
 通过这一过程，已初步完成了差速驱动小车的基础控制模型，并验证了其基本功能。
 
+# 联调——1
+
+`d=0.144m`和`v_max=4.8m/8s`和`w_max=48 RPM`
+
+测试最大角速度
+```c++
+#include "motor.h"
+#include"configuration.h"
+#include "diff_drive.h"
+#include<Arduino.h>
+#include "ps2_controller.h"
+#define RPM 48
+float omega_max=RPM*PI/60;
+// 创建PS2Controller对象
+PS2Controller ps2Controller;
+// 创建电机实例
+DifferentialDrive drive(0.144);
+Motor rightMotor(MOTOR_RIGHT_D_PIN, MOTOR_RIGHT_A_PIN);
+Motor leftMotor(MOTOR_LEFT_D_PIN,MOTOR_LEFT_A_PIN);
+void setup() {
+    // 初始化电机
+    rightMotor.begin();
+    leftMotor.begin();
+    Serial.begin(9600);
+    // 尝试初始化 PS2 控制器
+    if (!ps2Controller.init()) {
+        while (1);  // 初始化失败，停在这里
+  }
+}
+
+int map_math2pythics(float math,float math_max=0.41,int physcis_max=255){
+    int convert=0;
+    convert=int(round((math/math_max)*physcis_max));
+    return constrain(convert,-255,255); 
+}
+
+float map_pythics2math(int physics,int physcis_max=255,float math_max=0.41){
+    float convert=0;
+    physics=physics-physcis_max/2;
+    return constrain(physics,-math_max,math_max);
+}
+
+int physics_v_R=0;
+int physics_v_L=0;
+void loop() {
+    // 电机正转，速度 200（范围 0 到 255）
+
+    ps2Controller.update(true);
+    // 获取遥控器的状态
+    int analogX = ps2Controller.state.analogX;
+    int analogY = ps2Controller.state.analogY;
+    // float mathY=map_pythics2math(analogY);
+    // float mathX=map_pythics2math(analogX);
+    // drive.calculateWheelSpeeds(mathY,mathX,true);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
+    // physics_v_L=map_math2pythics(drive.v_L);
+    // physics_v_R=map_math2pythics(drive.v_R);
+    analogX=constrain((analogX-127)*2,-255,255);
+    rightMotor.setSpeed(analogX);
+    leftMotor.setSpeed(-analogX);
+    delay(100);
+}
+```
+# 数学模型物理模型转换
+然后
+```c++
+  #include "motor.h"
+  #include"configuration.h"
+  #include "diff_drive.h"
+  #include<Arduino.h>
+  #include "ps2_controller.h"
+  // 创建PS2Controller对象
+  PS2Controller ps2Controller;
+  // 创建电机实例
+  DifferentialDrive drive(0.144);
+  Motor rightMotor(MOTOR_RIGHT_D_PIN, MOTOR_RIGHT_A_PIN);
+  Motor leftMotor(MOTOR_LEFT_D_PIN,MOTOR_LEFT_A_PIN);
+  void setup() {
+      // 初始化电机
+      rightMotor.begin();
+      leftMotor.begin();
+      Serial.begin(9600);
+      // 尝试初始化 PS2 控制器
+      if (!ps2Controller.init()) {
+          while (1);  // 初始化失败，停在这里
+    }
+  }
+
+  int map_math2pythics(float math,float math_max=0.41,int physcis_max=255){
+      int convert=0;
+      convert=int(round((math/math_max)*physcis_max));
+      return constrain(convert,-255,255); 
+  }
+
+  float map_pythics2math(int physics,int physcis_max=255,float math_max=0.41){
+      float convert=0;
+      physics=physics-physcis_max/2;
+      return constrain(physics,-math_max,math_max);
+  }
+
+  int physics_v_R=0;
+  int physics_v_L=0;
+  void loop() {
+      // 电机正转，速度 200（范围 0 到 255）
+
+      ps2Controller.update();
+      // 获取遥控器的状态
+      int analogX = ps2Controller.state.analogX;
+      int analogY = ps2Controller.state.analogY;
+      float mathY=map_pythics2math(analogY);
+      float mathX=map_pythics2math(analogX);
+      drive.calculateWheelSpeeds(mathY,mathX 0,true);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
+      physics_v_L=map_math2pythics(drive.v_L);
+      physics_v_R=map_math2pythics(drive.v_R);
+      rightMotor.setSpeed(physics_v_R);
+      leftMotor.setSpeed(physics_v_L);
+      delay(100);
+
+      
+  }
+```
