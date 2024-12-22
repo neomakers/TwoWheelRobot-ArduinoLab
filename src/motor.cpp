@@ -11,13 +11,13 @@ void Motor::begin() {
     stop();
 }
 
-void Motor::setSpeed(int speed,unsigned int zone=10) {
+void Motor::setSpeed(int speed,int zone=10) {
     speed = constrain(speed, -255, 255);
 
     if (speed > zone) {
         analogWrite(_motorD_Pin, speed);
         analogWrite(_motorA_Pin, 0);
-    } else if (speed < -zone) {
+    } else if (speed < -1*zone) {
         analogWrite(_motorD_Pin, 0);
         analogWrite(_motorA_Pin, -speed);
     } else {

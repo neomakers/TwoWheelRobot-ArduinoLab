@@ -1,54 +1,117 @@
-#include "motor.h"
-#include"configuration.h"
-#include "diff_drive.h"
-#include<Arduino.h>
-#include "ps2_controller.h"
-#define RPM 48
-float omega_max=RPM*PI/60;
-// 创建PS2Controller对象
-PS2Controller ps2Controller;
-// 创建电机实例
-DifferentialDrive drive(0.144);
-Motor rightMotor(MOTOR_RIGHT_D_PIN, MOTOR_RIGHT_A_PIN);
-Motor leftMotor(MOTOR_LEFT_D_PIN,MOTOR_LEFT_A_PIN);
-void setup() {
-    // 初始化电机
-    rightMotor.begin();
-    leftMotor.begin();
-    Serial.begin(9600);
-    // 尝试初始化 PS2 控制器
-    if (!ps2Controller.init()) {
-        while (1);  // 初始化失败，停在这里
+#include <TimerOne.h> // 使用TimerOne库，需要安装
+
+double samplingPeriod = 100; // Time for encoder readings
+volatile unsigned long previousTime = 0;
+static volatile unsigned long lastDebounceTime = 0; // Time for debounce
+
+double currentRPM = 0;
+double filteredRPM = currentRPM;
+double alpha = 0.08; // Exponential moving average filter
+
+volatile int pulseCount = 0; // Number of pulses read by Arduino
+int slotsCount = 20; // Number of slots
+
+int pwmPin = 3;
+
+// PID constants
+double kp = 1;
+double ki = 1;
+double kd = 0.01;
+
+// PID variables
+double setPoint = 100.0; // Target RPM (Set Point)
+
+double currentError = 0;     // e(n)
+double previousError = 0;    // e(n-1)
+double twoStepBackError = 0; // e(n-2)
+
+double controlValue = 0;      // c(n)
+double previousControlValue = 0; // c(n-1)
+double sampleTime = 0.1;      // Ts (100ms)
+
+double pidOutput = 0;
+void encoderInterrupt();
+void timerISR();
+void setup() 
+{
+  Serial.begin(9600);
+  attachInterrupt(0, encoderInterrupt, RISING); // Read pulses using interrupt
+  pinMode(pwmPin, OUTPUT);
+
+  // 使用Timer1设置定时中断，采样周期为 100ms
+  Timer1.initialize(100000); // 定时器周期为 100,000 微秒 (100 ms)
+  Timer1.attachInterrupt(timerISR); // 绑定定时器中断函数
+}
+
+void loop() 
+{
+  // 更新设定点 (Set Point) 的增减
+  if (digitalRead(4)) // Increment Set Point
+  {
+    setPoint = setPoint + 10;
+    delay(500);
+  }
+
+  if (digitalRead(5)) // Decrement Set Point
+  {
+    setPoint = setPoint - 10;
+    delay(500);
   }
 }
 
-int map_math2pythics(float math,float math_max=0.41,int physcis_max=255){
-    int convert=0;
-    convert=int(round((math/math_max)*physcis_max));
-    return constrain(convert,-255,255); 
+void encoderInterrupt()
+{
+  if (digitalRead(2) && (micros() - lastDebounceTime >= 500)) // Debounce mechanism
+  {
+    lastDebounceTime = micros();
+    pulseCount++;  
+  }  
 }
 
-float map_pythics2math(int physics,int physcis_max=255,float math_max=0.41){
-    float convert=0;
-    physics=physics-physcis_max/2;
-    return constrain(physics,-math_max,math_max);
+
+
+double calculatePID() {
+  currentError = setPoint - filteredRPM;
+
+  // PID 差分方程
+  controlValue = previousControlValue + 
+                 (kp + (kd / sampleTime)) * currentError +
+                 (-kp + ki * sampleTime - (2 * kd / sampleTime)) * previousError +
+                 (kd / sampleTime) * twoStepBackError;
+
+  // 更新历史变量
+  previousControlValue = controlValue;
+  twoStepBackError = previousError;
+  previousError = currentError;
+
+  // 限制 PID 输出范围
+  if (controlValue >= 255) {
+    controlValue = 255;
+  }
+  if (controlValue < 0) {
+    controlValue = 0;
+  }
+  return controlValue;
 }
 
-int physics_v_R=0;
-int physics_v_L=0;
-void loop() {
-    // 电机正转，速度 200（范围 0 到 255）
 
-    ps2Controller.update(true);
-    // 获取遥控器的状态
-    int analogX = ps2Controller.state.analogX;
-    int analogY = ps2Controller.state.analogY;
-    float mathY=map_pythics2math(analogY,255,0.41);
-    float mathX=map_pythics2math(analogX,255,omega_max);
-    drive.calculateWheelSpeeds(mathY,mathX,true);  // 假设目标线速度为 0.1 m/s，角速度为 0.2 rad/s
-    physics_v_L=map_math2pythics(drive.v_L,0.41,240);
-    physics_v_R=map_math2pythics(drive.v_R);
-    rightMotor.setSpeed(physics_v_R);
-    leftMotor.setSpeed(physics_v_L); 
-    delay(100);
+
+// 定时器中断服务函数 (每 100ms 执行一次)
+void timerISR() {
+  // 计算当前 RPM
+  currentRPM = (pulseCount * 60000.0) / (samplingPeriod * slotsCount);
+  filteredRPM = alpha * currentRPM + (1.0 - alpha) * filteredRPM; // Exponential moving average filter
+  pulseCount = 0;
+
+  // 计算 PID 输出
+  pidOutput = calculatePID();
+  analogWrite(pwmPin, int(pidOutput));
+
+  // 打印数据用于调试
+  Serial.print(pidOutput);     // Control variable (CV)
+  Serial.print(",");
+  Serial.print(setPoint);      // Set Point (SP)
+  Serial.print(",");
+  Serial.println(filteredRPM); // Process Variable (PV)
 }
+   
